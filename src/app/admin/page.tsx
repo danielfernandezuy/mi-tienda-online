@@ -39,6 +39,107 @@ type Order = {
   created_at: string;
 };
 
+type Service = {
+  title: string;
+  description: string;
+  image: string;
+  category: string;
+};
+
+type SiteContent = {
+  hero_eyebrow: string;
+  hero_title: string;
+  hero_highlight: string;
+  hero_description: string;
+  hero_button: string;
+  collections_eyebrow: string;
+  collections_title: string;
+  services: Service[];
+  about_eyebrow: string;
+  about_title: string;
+  about_highlight: string;
+  about_description: string;
+  about_button: string;
+  about_image: string;
+  banner_eyebrow: string;
+  banner_title: string;
+  banner_button: string;
+  banner_image: string;
+  footer_tagline: string;
+  footer_description: string;
+  footer_attention_title: string;
+  footer_shipping: string;
+  footer_pickup: string;
+  footer_contact: string;
+  footer_social_title: string;
+  footer_social_label: string;
+  footer_copyright: string;
+};
+
+const defaultSiteContent: SiteContent = {
+  hero_eyebrow: "Lindos Detalles · Objetos con encanto",
+  hero_title: "Pequeños detalles,",
+  hero_highlight: "grandes momentos.",
+  hero_description:
+    "Velas artesanales y piezas decorativas hechas con dedicación para llenar tus espacios de belleza y calidez.",
+  hero_button: "Descubrir la colección",
+  collections_eyebrow: "Un mundo de pequeños detalles",
+  collections_title: "Descubrí nuestras colecciones",
+  services: [
+    {
+      title: "Velas artesanales",
+      description: "Pequeñas creaciones para llenar tus espacios de calidez.",
+      image:
+        "https://images.unsplash.com/photo-1603006905003-be475563bc59?w=600",
+      category: "Velas",
+    },
+    {
+      title: "Decoración en yeso",
+      description: "Piezas delicadas que aportan encanto a cada rincón.",
+      image:
+        "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=600",
+      category: "Yeso",
+    },
+    {
+      title: "Detalles especiales",
+      description: "Objetos únicos para regalar y sorprender.",
+      image:
+        "https://images.unsplash.com/photo-1602874801007-bd458bb1b8b6?w=600",
+      category: "Todos",
+    },
+    {
+      title: "Hecho con amor",
+      description: "Cada pieza está preparada con dedicación y cuidado.",
+      image:
+        "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=600",
+      category: "Todos",
+    },
+  ],
+  about_eyebrow: "Nuestra esencia",
+  about_title: "Más que objetos,",
+  about_highlight: "pequeños momentos.",
+  about_description:
+    "En Lindos Detalles creemos que son las pequeñas cosas las que hacen especiales nuestros espacios. Creamos velas artesanales y piezas decorativas con dedicación, pensando en quienes disfrutan de los detalles únicos.",
+  about_button: "Conocé nuestra historia",
+  about_image:
+    "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1000",
+  banner_eyebrow: "Lindos Detalles",
+  banner_title: "Un detalle especial puede cambiarlo todo.",
+  banner_button: "Encontrá el tuyo",
+  banner_image:
+    "https://images.unsplash.com/photo-1602874801007-bd458bb1b8b6?w=1600",
+  footer_tagline: "Hecho con amor",
+  footer_description:
+    "Pequeñas creaciones para hacer especiales tus momentos.",
+  footer_attention_title: "Atención",
+  footer_shipping: "Envíos",
+  footer_pickup: "Retiro",
+  footer_contact: "Compras y consultas",
+  footer_social_title: "Seguinos",
+  footer_social_label: "Instagram",
+  footer_copyright: "© 2026 Lindos Detalles. Todos los derechos reservados.",
+};
+
 const orderStatuses = [
   { value: "pending", label: "Pendiente" },
   { value: "confirmed", label: "Confirmado" },
@@ -46,6 +147,11 @@ const orderStatuses = [
   { value: "delivered", label: "Entregado" },
   { value: "cancelled", label: "Cancelado" },
 ];
+
+type TextContentKey = Exclude<
+  keyof SiteContent,
+  "services" | "about_image" | "banner_image"
+>;
 
 export default function AdminPage() {
   const [email, setEmail] = useState("");
@@ -64,6 +170,10 @@ export default function AdminPage() {
   const [category, setCategory] = useState("Velas");
   const [image, setImage] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [siteContent, setSiteContent] =
+    useState<SiteContent>(defaultSiteContent);
+  const [siteImages, setSiteImages] = useState<Record<string, File>>({});
 
   async function loadProducts() {
     const { data, error } = await supabase
@@ -93,6 +203,33 @@ export default function AdminPage() {
     }
   }
 
+  async function loadSiteContent() {
+    const { data, error } = await supabase
+      .from("site_content")
+      .select("content")
+      .eq("id", 1)
+      .single();
+
+    if (error) {
+      console.error(error);
+      setError("No pudimos cargar la personalización de la tienda.");
+      return;
+    }
+
+    const incoming = data.content as Partial<SiteContent>;
+
+    setSiteContent({
+      ...defaultSiteContent,
+      ...incoming,
+      services: Array.isArray(incoming.services)
+        ? defaultSiteContent.services.map((fallback, index) => ({
+            ...fallback,
+            ...(incoming.services?.[index] || {}),
+          }))
+        : defaultSiteContent.services,
+    });
+  }
+
   async function checkAdmin(userId: string) {
     const { data, error } = await supabase
       .from("admin_users")
@@ -110,7 +247,11 @@ export default function AdminPage() {
     setAuthorized(true);
     setError("");
 
-    await Promise.all([loadProducts(), loadOrders()]);
+    await Promise.all([
+      loadProducts(),
+      loadOrders(),
+      loadSiteContent(),
+    ]);
 
     setLoading(false);
   }
@@ -316,6 +457,158 @@ export default function AdminPage() {
     }
   }
 
+  function updateContentField(key: TextContentKey, value: string) {
+    setSiteContent((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function updateService(
+    index: number,
+    field: keyof Service,
+    value: string
+  ) {
+    setSiteContent((current) => ({
+      ...current,
+      services: current.services.map((service, i) =>
+        i === index ? { ...service, [field]: value } : service
+      ),
+    }));
+  }
+
+  function selectSiteImage(key: string, file: File | null) {
+    if (!file) return;
+
+    setSiteImages((current) => ({
+      ...current,
+      [key]: file,
+    }));
+  }
+
+  async function uploadSiteImage(file: File) {
+    const extension = file.name.split(".").pop() || "jpg";
+    const filePath = `site/${crypto.randomUUID()}.${extension}`;
+
+    const { error } = await supabase.storage
+      .from("products")
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("products")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  }
+
+  async function saveSiteContent(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      const updatedContent: SiteContent = {
+        ...siteContent,
+        services: [...siteContent.services],
+      };
+
+      for (const [key, file] of Object.entries(siteImages)) {
+        const imageUrl = await uploadSiteImage(file);
+
+        if (key === "about_image" || key === "banner_image") {
+          updatedContent[key] = imageUrl;
+        } else if (key.startsWith("service_")) {
+          const index = Number(key.split("_")[1]);
+
+          if (updatedContent.services[index]) {
+            updatedContent.services[index] = {
+              ...updatedContent.services[index],
+              image: imageUrl,
+            };
+          }
+        }
+      }
+
+      const { error } = await supabase
+        .from("site_content")
+        .update({
+          content: updatedContent,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", 1);
+
+      if (error) throw error;
+
+      setSiteContent(updatedContent);
+      setSiteImages({});
+      alert("¡La personalización de tu tienda se guardó correctamente!");
+    } catch (err) {
+      console.error(err);
+      setError(
+        "No pudimos guardar los cambios. Revisá los permisos de Storage y volvé a intentarlo."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function renderTextField(
+    label: string,
+    key: TextContentKey,
+    multiline = false
+  ) {
+    return (
+      <div>
+        <label className="block text-sm mb-2">{label}</label>
+        {multiline ? (
+          <textarea
+            value={siteContent[key]}
+            onChange={(e) => updateContentField(key, e.target.value)}
+            rows={3}
+            className="w-full border border-[#cfc4b5] p-3 bg-transparent"
+          />
+        ) : (
+          <input
+            value={siteContent[key]}
+            onChange={(e) => updateContentField(key, e.target.value)}
+            className="w-full border border-[#cfc4b5] p-3 bg-transparent"
+          />
+        )}
+      </div>
+    );
+  }
+
+  function renderImageField(
+    label: string,
+    key: "about_image" | "banner_image"
+  ) {
+    return (
+      <div>
+        <label className="block text-sm mb-2">{label}</label>
+        <img
+          src={siteContent[key]}
+          alt={label}
+          className="w-full h-44 object-cover bg-[#eee8df] mb-3"
+        />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) =>
+            selectSiteImage(key, e.target.files?.[0] || null)
+          }
+          className="w-full text-sm"
+        />
+        {siteImages[key] && (
+          <p className="text-xs text-green-700 mt-2">
+            Nueva imagen seleccionada: {siteImages[key].name}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   function formatPrice(value: number) {
     return `$ ${value.toLocaleString("es-UY")} UYU`;
   }
@@ -399,16 +692,16 @@ export default function AdminPage() {
           Panel de administración
         </h2>
         <p className="text-sm text-[#897f73] mb-8">
-          Administrá tus productos y las compras de tu tienda.
+          Administrá tus productos, pedidos y la apariencia de tu tienda.
         </p>
 
-        <div className="flex gap-3 border-b border-[#ded8ce] mb-8">
+        <div className="flex gap-3 border-b border-[#ded8ce] mb-8 overflow-x-auto">
           <button
             onClick={() => {
               setActiveTab("products");
               setError("");
             }}
-            className={`px-5 py-3 text-sm ${
+            className={`px-5 py-3 text-sm whitespace-nowrap ${
               activeTab === "products"
                 ? "border-b-2 border-[#8c765d] text-[#6e5943]"
                 : "text-[#897f73]"
@@ -423,13 +716,28 @@ export default function AdminPage() {
               setError("");
               loadOrders();
             }}
-            className={`px-5 py-3 text-sm ${
+            className={`px-5 py-3 text-sm whitespace-nowrap ${
               activeTab === "orders"
                 ? "border-b-2 border-[#8c765d] text-[#6e5943]"
                 : "text-[#897f73]"
             }`}
           >
             Pedidos ({orders.length})
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab("customize");
+              setError("");
+              loadSiteContent();
+            }}
+            className={`px-5 py-3 text-sm whitespace-nowrap ${
+              activeTab === "customize"
+                ? "border-b-2 border-[#8c765d] text-[#6e5943]"
+                : "text-[#897f73]"
+            }`}
+          >
+            Personalizar tienda
           </button>
         </div>
 
@@ -453,7 +761,9 @@ export default function AdminPage() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={(e) => setImage(e.target.files?.[0] || null)}
+                onChange={(e) =>
+                  setImage(e.target.files?.[0] || null)
+                }
                 className="w-full text-sm mb-5"
               />
               <p className="text-xs text-[#897f73] mb-5">
@@ -462,7 +772,9 @@ export default function AdminPage() {
                   : "Elegí una imagen de la galería de tu celular."}
               </p>
 
-              <label className="block text-sm mb-2">Nombre del producto</label>
+              <label className="block text-sm mb-2">
+                Nombre del producto
+              </label>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -510,8 +822,8 @@ export default function AdminPage() {
                   {saving
                     ? "Guardando..."
                     : editingId
-                    ? "Guardar cambios"
-                    : "Agregar producto"}
+                      ? "Guardar cambios"
+                      : "Agregar producto"}
                 </button>
 
                 {editingId && (
@@ -550,7 +862,9 @@ export default function AdminPage() {
                     )}
 
                     <div className="flex-1 min-w-0">
-                      <p className="font-serif text-lg">{product.name}</p>
+                      <p className="font-serif text-lg">
+                        {product.name}
+                      </p>
                       <p className="text-xs text-[#897f73]">
                         {product.category} · $ {product.price}
                       </p>
@@ -593,15 +907,14 @@ export default function AdminPage() {
           <section>
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h3 className="font-serif text-2xl">Pedidos recibidos</h3>
+                <h3 className="font-serif text-2xl">
+                  Pedidos recibidos
+                </h3>
                 <p className="text-sm text-[#897f73] mt-1">
                   Consultá las compras y actualizá sus estados.
                 </p>
               </div>
-              <button
-                onClick={loadOrders}
-                className="text-sm underline"
-              >
+              <button onClick={loadOrders} className="text-sm underline">
                 Actualizar
               </button>
             </div>
@@ -641,7 +954,9 @@ export default function AdminPage() {
                         <p className="text-xs uppercase tracking-wider text-[#897f73] mb-2">
                           Cliente
                         </p>
-                        <p className="font-medium">{order.customer_name}</p>
+                        <p className="font-medium">
+                          {order.customer_name}
+                        </p>
                         <p className="mt-1">{order.customer_phone}</p>
                         {order.customer_email && (
                           <p className="mt-1 break-all">
@@ -717,7 +1032,10 @@ export default function AdminPage() {
                           className="w-full border border-[#cfc4b5] p-3 bg-white rounded-lg text-sm"
                         >
                           {orderStatuses.map((status) => (
-                            <option key={status.value} value={status.value}>
+                            <option
+                              key={status.value}
+                              value={status.value}
+                            >
                               {status.label}
                             </option>
                           ))}
@@ -754,8 +1072,193 @@ export default function AdminPage() {
             )}
           </section>
         )}
+
+        {activeTab === "customize" && (
+          <form onSubmit={saveSiteContent} className="space-y-8">
+            <div>
+              <h3 className="font-serif text-2xl mb-2">
+                Personalizar tienda
+              </h3>
+              <p className="text-sm text-[#897f73]">
+                Modificá los textos y las fotografías que ven tus clientes.
+                Al guardar, los cambios quedarán almacenados.
+              </p>
+            </div>
+
+            <section className="bg-white border border-[#ded8ce] p-5 md:p-8 space-y-5">
+              <h4 className="font-serif text-xl border-b border-[#eee8df] pb-3">
+                1. Portada principal
+              </h4>
+              {renderTextField("Texto pequeño superior", "hero_eyebrow")}
+              {renderTextField("Título principal", "hero_title")}
+              {renderTextField("Continuación del título", "hero_highlight")}
+              {renderTextField(
+                "Descripción",
+                "hero_description",
+                true
+              )}
+              {renderTextField("Texto del botón", "hero_button")}
+              <p className="text-xs text-[#897f73]">
+                La fotografía principal se mantiene como está configurada
+                actualmente. Más adelante también podremos hacerla editable.
+              </p>
+            </section>
+
+            <section className="bg-white border border-[#ded8ce] p-5 md:p-8 space-y-5">
+              <h4 className="font-serif text-xl border-b border-[#eee8df] pb-3">
+                2. Colecciones
+              </h4>
+              {renderTextField(
+                "Texto superior de la sección",
+                "collections_eyebrow"
+              )}
+              {renderTextField(
+                "Título de la sección",
+                "collections_title"
+              )}
+
+              {siteContent.services.map((service, index) => (
+                <div
+                  key={index}
+                  className="border border-[#eee8df] p-4 space-y-4"
+                >
+                  <h5 className="font-serif text-lg">
+                    Colección {index + 1}
+                  </h5>
+
+                  <div>
+                    <label className="block text-sm mb-2">
+                      Fotografía
+                    </label>
+                    <img
+                      src={service.image}
+                      alt={service.title}
+                      className="w-full h-44 object-cover bg-[#eee8df] mb-3"
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        selectSiteImage(
+                          `service_${index}`,
+                          e.target.files?.[0] || null
+                        )
+                      }
+                      className="w-full text-sm"
+                    />
+                    {siteImages[`service_${index}`] && (
+                      <p className="text-xs text-green-700 mt-2">
+                        Nueva imagen seleccionada:{" "}
+                        {siteImages[`service_${index}`].name}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm mb-2">Título</label>
+                    <input
+                      value={service.title}
+                      onChange={(e) =>
+                        updateService(index, "title", e.target.value)
+                      }
+                      className="w-full border border-[#cfc4b5] p-3 bg-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm mb-2">
+                      Descripción
+                    </label>
+                    <textarea
+                      value={service.description}
+                      onChange={(e) =>
+                        updateService(index, "description", e.target.value)
+                      }
+                      rows={3}
+                      className="w-full border border-[#cfc4b5] p-3 bg-transparent"
+                    />
+                  </div>
+                </div>
+              ))}
+            </section>
+
+            <section className="bg-white border border-[#ded8ce] p-5 md:p-8 space-y-5">
+              <h4 className="font-serif text-xl border-b border-[#eee8df] pb-3">
+                3. Nuestra esencia
+              </h4>
+              {renderImageField("Fotografía", "about_image")}
+              {renderTextField("Texto superior", "about_eyebrow")}
+              {renderTextField("Título", "about_title")}
+              {renderTextField(
+                "Continuación del título",
+                "about_highlight"
+              )}
+              {renderTextField(
+                "Descripción",
+                "about_description",
+                true
+              )}
+              {renderTextField("Texto del botón", "about_button")}
+            </section>
+
+            <section className="bg-white border border-[#ded8ce] p-5 md:p-8 space-y-5">
+              <h4 className="font-serif text-xl border-b border-[#eee8df] pb-3">
+                4. Banner inferior
+              </h4>
+              {renderImageField("Fotografía", "banner_image")}
+              {renderTextField("Texto superior", "banner_eyebrow")}
+              {renderTextField("Frase principal", "banner_title")}
+              {renderTextField("Texto del botón", "banner_button")}
+            </section>
+
+            <section className="bg-white border border-[#ded8ce] p-5 md:p-8 space-y-5">
+              <h4 className="font-serif text-xl border-b border-[#eee8df] pb-3">
+                5. Pie de página
+              </h4>
+              {renderTextField("Frase de marca", "footer_tagline")}
+              {renderTextField(
+                "Descripción",
+                "footer_description",
+                true
+              )}
+              {renderTextField(
+                "Título de atención",
+                "footer_attention_title"
+              )}
+              {renderTextField("Texto de envíos", "footer_shipping")}
+              {renderTextField("Texto de retiro", "footer_pickup")}
+              {renderTextField(
+                "Texto de contacto",
+                "footer_contact"
+              )}
+              {renderTextField(
+                "Título de redes sociales",
+                "footer_social_title"
+              )}
+              {renderTextField(
+                "Texto de Instagram",
+                "footer_social_label"
+              )}
+              {renderTextField(
+                "Texto de derechos de autor",
+                "footer_copyright"
+              )}
+            </section>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full bg-[#b5a18a] text-white py-5 text-xs tracking-widest uppercase disabled:opacity-50"
+            >
+              {saving ? "Guardando cambios..." : "Guardar personalización"}
+            </button>
+
+            <p className="text-xs text-center text-[#897f73]">
+              Recordá guardar los cambios para que queden almacenados.
+            </p>
+          </form>
+        )}
       </div>
     </main>
   );
 }
-
