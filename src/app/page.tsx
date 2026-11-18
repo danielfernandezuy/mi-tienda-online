@@ -21,6 +21,7 @@ type Service = {
 };
 
 type SiteContent = {
+  hero_image: string;
   hero_eyebrow: string;
   hero_title: string;
   hero_highlight: string;
@@ -57,6 +58,7 @@ const fallbackImage =
   "https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800";
 
 const defaultSiteContent: SiteContent = {
+  hero_image: heroImage,
   hero_eyebrow: "Lindos Detalles · Objetos con encanto",
   hero_title: "Pequeños detalles,",
   hero_highlight: "grandes momentos.",
@@ -225,7 +227,6 @@ export default function Home() {
 
           <nav className="hidden md:flex items-center gap-8 text-[10px] tracking-[0.2em] uppercase text-[#756b60]">
             <a href="#inicio" className="hover:text-[#ad987e] transition">Inicio</a>
-            <a href="#categorias" className="hover:text-[#ad987e] transition">Colecciones</a>
             <a href="#productos" className="hover:text-[#ad987e] transition">Tienda</a>
             <a href="#nosotros" className="hover:text-[#ad987e] transition">Nosotros</a>
             <a href="#contacto" className="hover:text-[#ad987e] transition">Contacto</a>
@@ -244,7 +245,7 @@ export default function Home() {
       <section id="inicio" className="relative min-h-[540px] md:min-h-[650px] flex items-center overflow-hidden">
 
         <img
-          src={heroImage}
+          src={content.hero_image || heroImage}
           alt="Ambiente cálido de decoración"
           className="absolute inset-0 w-full h-full object-cover"
         />
@@ -277,97 +278,6 @@ export default function Home() {
             </a>
 
           </div>
-        </div>
-      </section>
-
-      {/* PRESENTACIÓN DE COLECCIONES */}
-      <section id="categorias" className="max-w-7xl mx-auto px-5 md:px-12 py-16 md:py-24">
-
-        <div className="text-center mb-12">
-          <p className="text-[10px] tracking-[0.3em] uppercase text-[#a18b70] mb-4">
-            {content.collections_eyebrow}
-          </p>
-          <h2 className="font-serif text-3xl md:text-5xl">
-            {content.collections_title}
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-
-          {content.services.map((service, index) => (
-            <button
-              key={`${service.title}-${index}`}
-              onClick={() => {
-                setCategory(service.category);
-                document.getElementById("productos")?.scrollIntoView({
-                  behavior: "smooth",
-                });
-              }}
-              className="group text-left bg-[#F1E9DE] pb-6 hover:bg-[#eadcc8] transition"
-            >
-              <div className="aspect-[4/5] overflow-hidden">
-                <img
-                  src={service.image || fallbackImage}
-                  alt={service.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
-                />
-              </div>
-
-              <div className="px-4 md:px-5 pt-5">
-                <h3 className="font-serif text-lg md:text-xl">
-                  {service.title}
-                </h3>
-                <p className="text-[11px] leading-5 text-[#81776c] mt-2">
-                  {service.description}
-                </p>
-                <span className="inline-block text-[9px] tracking-[0.15em] uppercase mt-4 border-b border-[#ad987e] pb-1">
-                  Descubrir →
-                </span>
-              </div>
-            </button>
-          ))}
-
-        </div>
-      </section>
-
-      {/* NUESTRA ESENCIA */}
-      <section id="nosotros" className="bg-[#eee5d9]">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-2 items-center">
-
-          <div className="px-7 md:px-16 py-16 md:py-24">
-            <p className="text-[10px] tracking-[0.3em] uppercase text-[#a18b70] mb-5">
-              {content.about_eyebrow}
-            </p>
-
-            <h2 className="font-serif text-3xl md:text-5xl leading-tight">
-              {content.about_title}
-              <span className="block italic text-[#9d8368]">
-                {content.about_highlight}
-              </span>
-            </h2>
-
-            <p className="text-sm leading-7 text-[#756c61] mt-7">
-              {content.about_description}
-            </p>
-
-            <a
-              href="https://www.instagram.com/lindosdetalles_uy/"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block mt-8 bg-[#9d8368] text-white px-7 py-4 text-[9px] tracking-[0.2em] uppercase hover:bg-[#806b55] transition"
-            >
-              {content.about_button}
-            </a>
-          </div>
-
-          <div className="h-[350px] md:h-[580px]">
-            <img
-              src={content.about_image || fallbackImage}
-              alt="Decoración cálida y natural"
-              className="w-full h-full object-cover"
-            />
-          </div>
-
         </div>
       </section>
 
@@ -467,6 +377,47 @@ export default function Home() {
         </div>
       </section>
 
+      {/* NUESTRA ESENCIA */}
+      <section id="nosotros" className="bg-[#eee5d9]">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-2 items-center">
+
+          <div className="px-7 md:px-16 py-16 md:py-24">
+            <p className="text-[10px] tracking-[0.3em] uppercase text-[#a18b70] mb-5">
+              {content.about_eyebrow}
+            </p>
+
+            <h2 className="font-serif text-3xl md:text-5xl leading-tight">
+              {content.about_title}
+              <span className="block italic text-[#9d8368]">
+                {content.about_highlight}
+              </span>
+            </h2>
+
+            <p className="text-sm leading-7 text-[#756c61] mt-7">
+              {content.about_description}
+            </p>
+
+            <a
+              href="https://www.instagram.com/lindosdetalles_uy/"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block mt-8 bg-[#9d8368] text-white px-7 py-4 text-[9px] tracking-[0.2em] uppercase hover:bg-[#806b55] transition"
+            >
+              {content.about_button}
+            </a>
+          </div>
+
+          <div className="h-[350px] md:h-[580px]">
+            <img
+              src={content.about_image || fallbackImage}
+              alt="Decoración cálida y natural"
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+        </div>
+      </section>
+
       {/* BANNER FINAL */}
       <section className="relative min-h-[330px] md:min-h-[400px] flex items-center overflow-hidden">
 
@@ -521,7 +472,6 @@ export default function Home() {
               <a href="#inicio">Inicio</a>
               <a href="#productos">Tienda</a>
               <a href="#nosotros">Nosotros</a>
-              <a href="#categorias">Colecciones</a>
             </div>
           </div>
 

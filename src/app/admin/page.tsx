@@ -47,6 +47,7 @@ type Service = {
 };
 
 type SiteContent = {
+  hero_image: string;
   hero_eyebrow: string;
   hero_title: string;
   hero_highlight: string;
@@ -77,6 +78,7 @@ type SiteContent = {
 };
 
 const defaultSiteContent: SiteContent = {
+  hero_image: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1800",
   hero_eyebrow: "Lindos Detalles · Objetos con encanto",
   hero_title: "Pequeños detalles,",
   hero_highlight: "grandes momentos.",
@@ -150,7 +152,7 @@ const orderStatuses = [
 
 type TextContentKey = Exclude<
   keyof SiteContent,
-  "services" | "about_image" | "banner_image"
+  "services" | "hero_image" | "about_image" | "banner_image"
 >;
 
 export default function AdminPage() {
@@ -517,7 +519,7 @@ export default function AdminPage() {
       for (const [key, file] of Object.entries(siteImages)) {
         const imageUrl = await uploadSiteImage(file);
 
-        if (key === "about_image" || key === "banner_image") {
+        if (key === "hero_image" || key === "about_image" || key === "banner_image") {
           updatedContent[key] = imageUrl;
         } else if (key.startsWith("service_")) {
           const index = Number(key.split("_")[1]);
@@ -582,7 +584,7 @@ export default function AdminPage() {
 
   function renderImageField(
     label: string,
-    key: "about_image" | "banner_image"
+    key: "hero_image" | "about_image" | "banner_image"
   ) {
     return (
       <div>
@@ -1098,10 +1100,7 @@ export default function AdminPage() {
                 true
               )}
               {renderTextField("Texto del botón", "hero_button")}
-              <p className="text-xs text-[#897f73]">
-                La fotografía principal se mantiene como está configurada
-                actualmente. Más adelante también podremos hacerla editable.
-              </p>
+              {renderImageField("Fotografía de portada principal", "hero_image")}
             </section>
 
             <section className="bg-white border border-[#ded8ce] p-5 md:p-8 space-y-5">
