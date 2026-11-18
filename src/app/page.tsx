@@ -141,6 +141,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [content, setContent] =
     useState<SiteContent>(defaultSiteContent);
+  const [siteContentLoading, setSiteContentLoading] = useState(true);
 
   // CARGAR PRODUCTOS
   useEffect(() => {
@@ -175,6 +176,8 @@ export default function Home() {
 
       if (error) {
         console.error("Error cargando la personalización:", error);
+        setContent(defaultSiteContent);
+        setSiteContentLoading(false);
         return;
       }
 
@@ -191,6 +194,8 @@ export default function Home() {
               : defaultSiteContent.services,
         });
       }
+
+      setSiteContentLoading(false);
     }
 
     loadSiteContent();
@@ -208,6 +213,21 @@ export default function Home() {
 
   const money = (value: number) =>
     "$ " + value.toLocaleString("es-UY");
+
+  if (siteContentLoading) {
+    return (
+      <main className="min-h-screen bg-[#F8F5EE] text-[#39342f] flex items-center justify-center">
+        <div className="text-center px-6">
+          <p className="font-serif text-2xl tracking-[0.12em]">
+            LINDOS DETALLES
+          </p>
+          <p className="text-[10px] tracking-[0.25em] uppercase text-[#9b8873] mt-3">
+            Estamos preparando algo especial para vos...
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#F8F5EE] text-[#39342f]">
