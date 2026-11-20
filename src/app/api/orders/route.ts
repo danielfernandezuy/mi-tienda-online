@@ -2,6 +2,13 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+type ProductVariant = {
+  color: string | null;
+  size: string | null;
+  price: number;
+  image_url: string | null;
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -33,79 +40,130 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      delivery_method === "shipping" &&
-      (!shipping_address || !shipping_address.trim())
-    ) {
-      return NextResponse.json(
-        { error: "Falta la dirección de envío." },
-        { status: 400 }
+   if (
+  delivery_method === "shipping" &&
+  (!shipping_address || !shipping_address.trim())
+) {
+  return NextResponse.json(
+    { error: "Falta la dirección de envío." },
+    { status: 400 }
+  );
+}
+      // Validar cantidades, colores y tamaños
+      for (const item of items) {
+        if (
+          typeof item.product_id !== "string" ||
+          !Number.isInteger(item.quantity) ||
+          item.quantity < 1 ||
+          item.quantity > 20 ||
+          (item.color !== null && item.color !== undefined &&
+            typeof item.color !== "string") ||
+          (item.size !== null && item.size !== undefined &&
+            typeof item.size !== "string")
+        ) {
+          return NextResponse.json(
+            { error: "Hay productos, variantes o cantidades inválidas." },
+            { status: 400 }
+          );
+        }
+      }
+
+      const productIds = Array.from(
+        new Set(items.map((item: { product_id: string }) => item.product_id))
       );
-    }
 
-    // Validar cantidades y obtener identificadores
-    const quantities = new Map<string, number>();
+      // Consultar productos y variantes directamente en Supabase
+      const { data: products, error: productsError } =
+        await supabaseAdmin
+          .from("products")
+          .select("id, name, price, image_url, variants")
+          .in("id", productIds)
+          .eq("active", true);
 
-    for (const item of items) {
-      if (
-        typeof item.product_id !== "string" ||
-        !Number.isInteger(item.quantity) ||
-        item.quantity < 1 ||
-        item.quantity > 20
-      ) {
+      if (productsError) {
+        console.error(productsError);
         return NextResponse.json(
-          { error: "Hay productos o cantidades inválidas." },
+          { error: "No pudimos verificar los productos." },
+          { status: 500 }
+        );
+      }
+
+      if (!products || products.length !== productIds.length) {
+        return NextResponse.json(
+          { error: "Uno o más productos ya no están disponibles." },
           { status: 400 }
         );
       }
 
-      const current = quantities.get(item.product_id) || 0;
-      quantities.set(item.product_id, current + item.quantity);
-    }
-
-    const productIds = Array.from(quantities.keys());
-
-    // Consultar precios reales en Supabase
-    const { data: products, error: productsError } =
-      await supabaseAdmin
-        .from("products")
-        .select("id, name, price, image_url")
-        .in("id", productIds)
-        .eq("active", true);
-
-    if (productsError) {
-      console.error(productsError);
-      return NextResponse.json(
-        { error: "No pudimos verificar los productos." },
-        { status: 500 }
+      const productsMap = new Map(
+        products.map((product) => [product.id, product])
       );
-    }
 
-    if (!products || products.length !== productIds.length) {
-      return NextResponse.json(
-        { error: "Uno o más productos ya no están disponibles." },
-        { status: 400 }
+      // Verificar cada combinación y calcular su precio real
+      const orderItems = [];
+
+      for (const item of items) {
+        const product = productsMap.get(item.product_id);
+
+        if (!product) {
+          return NextResponse.json(
+            { error: "Uno o más productos ya no están disponibles." },
+            { status: 400 }
+          );
+        }
+
+        const variants = (product.variants || []) as ProductVariant[];
+
+        const color = item.color ?? null;
+        const size = item.size ?? null;
+
+        let variant: ProductVariant | undefined;
+
+        if (variants.length > 0) {
+          variant = variants.find(
+            (option) =>
+              option.color === color &&
+              option.size === size
+          );
+
+          if (!variant) {
+            return NextResponse.json(
+              {
+                error: `La variante seleccionada de ${product.name} ya no está disponible.`,
+              },
+              { status: 400 }
+            );
+          }
+        } else if (color !== null || size !== null) {
+          return NextResponse.json(
+            {
+              error: `El producto ${product.name} no tiene esas variantes.`,
+            },
+            { status: 400 }
+          );
+        }
+
+        const price = variant?.price ?? product.price;
+        const imageUrl = variant?.image_url || product.image_url;
+
+        orderItems.push({
+          product_id: product.id,
+          name: product.name,
+          color,
+          size,
+          price,
+          quantity: item.quantity,
+          subtotal: price * item.quantity,
+          image_url: imageUrl,
+        });
+      }
+
+      const totalAmount = orderItems.reduce(
+        (sum, item) => sum + item.subtotal,
+        0
       );
-    }
 
-    // Calcular el total usando los precios de la base de datos
-    const orderItems = products.map((product) => {
-      const quantity = quantities.get(product.id)!;
 
-      return {
-        product_id: product.id,
-        name: product.name,
-        price: product.price,
-        quantity,
-        subtotal: product.price * quantity,
-        image_url: product.image_url,
-      };
-    });
-
-    const totalAmount = orderItems.reduce(
-      (sum, item) => sum + item.subtotal,
-      0
-    );
 
     // Crear pedido
     const { data: order, error: orderError } =

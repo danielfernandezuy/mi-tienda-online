@@ -4,15 +4,26 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Product = {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  image_url: string | null;
-  active: boolean;
-};
+
+      type ProductVariant = {
+          color: string | null;
+            size: string | null;
+              price: number;
+                image_url: string | null;
+                };
+
+                type Product = {
+                  id: string;
+                    name: string;
+                      description: string;
+                        price: number;
+                          category: string;
+                            image_url: string | null;
+                              active: boolean;
+                                variants: ProductVariant[];
+                                };
+
+
 
 type OrderItem = {
   product_id: string;
@@ -173,6 +184,27 @@ export default function AdminPage() {
   const [image, setImage] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const [colors, setColors] = useState<string[]>([]);
+  const [sizes, setSizes] = useState<string[]>([]);
+  const [newColor, setNewColor] = useState("");
+  const [newSize, setNewSize] = useState("");
+
+   const variantCombinations =
+       colors.length > 0 || sizes.length > 0
+             ? (colors.length > 0 ? colors : [null]).flatMap((color) =>
+                       (sizes.length > 0 ? sizes : [null]).map((size) => ({
+                                   color,
+                                               size,
+                                                           key: JSON.stringify([color, size]),
+                                                                     }))
+                                                                             )
+                                                                                   : [];
+
+
+
+  const [variantPrices, setVariantPrices] = useState<Record<string, string>>({});
+  const [variantImages, setVariantImages] = useState<Record<string, File>>({});
+  const [variantImageUrls, setVariantImageUrls] = useState<Record<string, string>>({});
   const [siteContent, setSiteContent] =
     useState<SiteContent>(defaultSiteContent);
   const [siteImages, setSiteImages] = useState<Record<string, File>>({});
@@ -319,6 +351,7 @@ export default function AdminPage() {
     await supabase.auth.signOut();
   }
 
+
   function resetForm() {
     setName("");
     setDescription("");
@@ -326,6 +359,14 @@ export default function AdminPage() {
     setCategory("Velas");
     setImage(null);
     setEditingId(null);
+
+    setColors([]);
+    setSizes([]);
+    setNewColor("");
+    setNewSize("");
+    setVariantPrices({});
+    setVariantImages({});
+    setVariantImageUrls({});
   }
 
   function editProduct(product: Product) {
@@ -335,8 +376,54 @@ export default function AdminPage() {
     setPrice(String(product.price));
     setCategory(product.category);
     setImage(null);
+
+    const productVariants = product.variants || [];
+
+    setColors([
+      ...new Set(
+        productVariants
+          .map((variant) => variant.color)
+          .filter((color): color is string => Boolean(color))
+      ),
+    ]);
+
+    setSizes([
+      ...new Set(
+        productVariants
+          .map((variant) => variant.size)
+          .filter((size): size is string => Boolean(size))
+      ),
+    ]);
+
+    setVariantPrices(
+      Object.fromEntries(
+        productVariants.map((variant) => [
+          JSON.stringify([variant.color, variant.size]),
+          String(variant.price),
+        ])
+      )
+    );
+
+    setVariantImageUrls(
+      Object.fromEntries(
+        productVariants
+          .filter((variant) => variant.image_url)
+          .map((variant) => [
+            JSON.stringify([variant.color, variant.size]),
+            variant.image_url as string,
+          ])
+      )
+    );
+
+    setVariantImages({});
+    setNewColor("");
+    setNewSize("");
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+
+
 
   async function saveProduct(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -363,11 +450,51 @@ export default function AdminPage() {
         imageUrl = data.publicUrl;
       }
 
+
+      const savedVariants = await Promise.all(
+        variantCombinations.map(async (variant) => {
+          let variantImageUrl =
+            variantImageUrls[variant.key] || null;
+
+          const variantImage = variantImages[variant.key];
+
+          if (variantImage) {
+            const extension =
+              variantImage.name.split(".").pop() || "jpg";
+
+            const filePath =
+              `${crypto.randomUUID()}.${extension}`;
+
+            const { error: uploadError } = await supabase.storage
+              .from("products")
+              .upload(filePath, variantImage);
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage
+              .from("products")
+              .getPublicUrl(filePath);
+
+            variantImageUrl = data.publicUrl;
+          }
+
+          return {
+            color: variant.color,
+            size: variant.size,
+            price: Number(
+              variantPrices[variant.key] || price
+            ),
+            image_url: variantImageUrl,
+          };
+        })
+      );
+
       const productData = {
         name,
         description,
         price: Number(price),
         category,
+        variants: savedVariants,
         ...(imageUrl ? { image_url: imageUrl } : {}),
       };
 
@@ -385,6 +512,7 @@ export default function AdminPage() {
 
         if (error) throw error;
       }
+
 
       resetForm();
       await loadProducts();
@@ -811,9 +939,186 @@ export default function AdminPage() {
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full border border-[#cfc4b5] p-3 mb-6 bg-transparent"
               >
-                <option value="Velas">Velas</option>
-                <option value="Yeso">Yeso</option>
+               <option value="Velas">Velas</option>
+<option value="Yeso">Yeso</option>
+<option value="Kits">Kits</option>
+
               </select>
+<div className="border-t border-[#ded8ce] pt-6 mt-6">
+    <h4 className="font-serif text-xl mb-4">
+        Variantes del producto
+          </h4>
+
+            <p className="text-sm text-[#897f73] mb-5">
+                Podés agregar hasta 3 colores y 3 tamaños.
+                    Las combinaciones se crearán automáticamente.
+                      </p>
+
+<label className="block text-sm mb-2">Colores</label>
+
+<div className="flex items-center gap-3 mb-3">
+  <input
+    type="color"
+    value={newColor || "#ffffff"}
+    onChange={(e) => setNewColor(e.target.value)}
+    className="w-14 h-12 border border-[#cfc4b5] p-1 bg-white cursor-pointer"
+    aria-label="Elegir color"
+  />
+
+  <button
+    type="button"
+    disabled={colors.length >= 3}
+    onClick={() => {
+      const value = newColor || "#ffffff";
+
+      if (
+        !colors.includes(value) &&
+        colors.length < 3
+      ) {
+        setColors([...colors, value]);
+        setNewColor("");
+      }
+    }}
+    className="bg-[#b5a18a] text-white px-4 py-3 disabled:opacity-40"
+  >
+    Agregar color
+  </button>
+</div>
+
+<div className="flex flex-wrap gap-3 mb-6">
+  {colors.map((color) => (
+    <button
+      key={color}
+      type="button"
+      title={`Quitar color ${color}`}
+      onClick={() =>
+        setColors(colors.filter((item) => item !== color))
+      }
+      className="flex items-center gap-2 border border-[#cfc4b5] px-3 py-2"
+    >
+      <span
+        className="w-7 h-7 rounded-full border border-[#b8b8b8]"
+        style={{
+          backgroundColor: color.startsWith("#")
+            ? color
+            : color.toLowerCase() === "blanco"
+              ? "#ffffff"
+              : color.toLowerCase() === "negro"
+                ? "#000000"
+                : "#cccccc",
+        }}
+      />
+      <span className="text-xs">{color} ×</span>
+    </button>
+  ))}
+</div>
+
+                                                                                                                                                                                                                                                                                                              <label className="block text-sm mb-2">Tamaños</label>
+
+                                                                                                                                                                                                                                                                                                                <div className="flex gap-2 mb-3">
+                                                                                                                                                                                                                                                                                                                    <input
+                                                                                                                                                                                                                                                                                                                          value={newSize}
+                                                                                                                                                                                                                                                                                                                                onChange={(e) => setNewSize(e.target.value)}
+                                                                                                                                                                                                                                                                                                                                      placeholder="Ej. Mediano"
+                                                                                                                                                                                                                                                                                                                                            className="flex-1 min-w-0 border border-[#cfc4b5] p-3"
+                                                                                                                                                                                                                                                                                                                                                />
+                                                                                                                                                                                                                                                                                                                                                    <button
+                                                                                                                                                                                                                                                                                                                                                          type="button"
+                                                                                                                                                                                                                                                                                                                                                                disabled={!newSize.trim() || sizes.length >= 3}
+                                                                                                                                                                                                                                                                                                                                                                      onClick={() => {
+                                                                                                                                                                                                                                                                                                                                                                              const value = newSize.trim();
+                                                                                                                                                                                                                                                                                                                                                                                      if (
+                                                                                                                                                                                                                                                                                                                                                                                                value &&
+                                                                                                                                                                                                                                                                                                                                                                                                          !sizes.some(
+                                                                                                                                                                                                                                                                                                                                                                                                                      (size) => size.toLowerCase() === value.toLowerCase()
+                                                                                                                                                                                                                                                                                                                                                                                                                                ) &&
+                                                                                                                                                                                                                                                                                                                                                                                                                                          sizes.length < 3
+                                                                                                                                                                                                                                                                                                                                                                                                                                                  ) {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                            setSizes([...sizes, value]);
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                      setNewSize("");
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                              }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          className="bg-[#b5a18a] text-white px-4 disabled:opacity-40"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              >
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Agregar
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        </button>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          </div>
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div className="flex flex-wrap gap-2 mb-6">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                {sizes.map((size) => (
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <button
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              key={size}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      type="button"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              onClick={() =>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        setSizes(sizes.filter((item) => item !== size))
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        className="border border-[#cfc4b5] px-3 py-2 text-sm"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              >
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      {size} ×
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            </button>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ))}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  </div>
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    {variantCombinations.length > 0 && (
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div className="space-y-4">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <h5 className="font-medium">Combinaciones disponibles</h5>
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    {variantCombinations.map((variant) => (
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      key={variant.key}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                className="border border-[#ded8ce] p-4 space-y-3"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        >
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <p className="font-medium text-sm">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              {variant.color || "Sin color"} / {variant.size || "Sin tamaño"}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        </p>
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <label className="block text-xs">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              Precio de esta combinación (UYU)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        </label>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <input
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              type="number"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          min="0"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      step="1"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  value={variantPrices[variant.key] ?? ""}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              onChange={(e) =>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            setVariantPrices({
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            ...variantPrices,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            [variant.key]: e.target.value,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          })
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  placeholder={`Precio general: ${price || "sin definir"}`}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              className="w-full border border-[#cfc4b5] p-3"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        />
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <label className="block text-xs">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              Fotografía de esta combinación
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        </label>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <input
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              type="file"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          accept="image/*"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      onChange={(e) => {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    const file = e.target.files?.[0];
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  if (file) {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  setVariantImages({
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    ...variantImages,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      [variant.key]: file,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      });
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            className="w-full text-sm"
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      />
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                {variantImages[variant.key] && (
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <p className="text-xs text-green-700">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          Foto seleccionada: {variantImages[variant.key].name}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      </p>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                )}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        </div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              ))}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  </div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    )}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    </div>
+
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <button

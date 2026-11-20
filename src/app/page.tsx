@@ -4,6 +4,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+type ProductVariant = {
+  color: string | null;
+  size: string | null;
+  price: number;
+  image_url: string | null;
+};
+
 type Product = {
   id: string;
   name: string;
@@ -11,6 +18,13 @@ type Product = {
   category: string;
   price: number;
   image_url: string | null;
+  variants: ProductVariant[];
+};
+
+type CartItem = {
+  product_id: string;
+  color: string | null;
+  size: string | null;
 };
 
 type Service = {
@@ -134,9 +148,12 @@ const defaultSiteContent: SiteContent = {
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<string[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [category, setCategory] = useState("Todos");
+  const [selectedVariants, setSelectedVariants] = useState<
+  Record<string, { color: string | null; size: string | null }>
+>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [content, setContent] =
@@ -206,10 +223,21 @@ export default function Home() {
       ? products
       : products.filter((product) => product.category === category);
 
-  const total = cart.reduce((sum, id) => {
-    const product = products.find((item) => item.id === id);
-    return sum + (product?.price || 0);
-  }, 0);
+ const total = cart.reduce((sum, cartItem) => {
+  const product = products.find(
+    (item) => item.id === cartItem.product_id
+  );
+
+  if (!product) return sum;
+
+  const variant = product.variants?.find(
+    (item) =>
+      item.color === cartItem.color &&
+      item.size === cartItem.size
+  );
+
+  return sum + (variant?.price ?? product.price);
+}, 0);
 
   const money = (value: number) =>
     "$ " + value.toLocaleString("es-UY");
@@ -256,7 +284,7 @@ export default function Home() {
             onClick={() => setShowCart(true)}
             className="shrink-0 border border-[#cbbba6] px-4 py-3 text-[10px] tracking-[0.15em] uppercase hover:bg-[#eadcc8] transition"
           >
-            Bolsa ({cart.length})
+            Tu caja ({cart.length})
           </button>
         </div>
       </header>
@@ -317,7 +345,7 @@ export default function Home() {
         </div>
 
         <div className="flex justify-center gap-3 mb-10 flex-wrap">
-          {["Todos", "Velas", "Yeso"].map((cat) => (
+          {["Todos", "Velas", "Yeso", "Kits"].map((cat) => (
             <button
               key={cat}
               onClick={() => setCategory(cat)}
@@ -356,12 +384,24 @@ export default function Home() {
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-10 md:gap-x-7 md:gap-y-14">
 
-          {filtered.map((product) => (
-            <article key={product.id} className="group">
+          {filtered.map((product) => {
+  const selected = selectedVariants[product.id] || {
+    color: product.variants?.[0]?.color ?? null,
+    size: product.variants?.[0]?.size ?? null,
+  };
+
+  const currentVariant = product.variants?.find(
+    (variant) =>
+      variant.color === selected.color &&
+      variant.size === selected.size
+  );
+
+  return (
+    <article key={product.id} className="group">
 
               <div className="aspect-[4/5] overflow-hidden bg-[#eee5d9] mb-4">
                 <img
-                  src={product.image_url || fallbackImage}
+                  src={currentVariant?.image_url || product.image_url || fallbackImage}
                   alt={product.name}
                   loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
@@ -377,23 +417,131 @@ export default function Home() {
               </h3>
 
               <p className="text-[11px] md:text-xs text-[#897f73] leading-5 mt-2 min-h-10">
-                {product.description}
+               {product.description}
               </p>
+               {product.variants?.length > 0 && (
+  <div className="mt-4 space-y-3">
+    {Array.from(
+      new Set(product.variants.map((variant) => variant.color).filter(Boolean))
+    ).length > 0 && (
+      <div>
+        <p className="text-[9px] uppercase tracking-widest mb-2">
+          Color
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {Array.from(
+            new Set(product.variants.map((variant) => variant.color).filter(Boolean))
+          ).map((color) => (
+            <button
+              key={color}
+              type="button"
+onClick={() => {
+  const availableVariants = product.variants.filter(
+    (variant) => variant.color === color
+  );
+
+  const nextVariant =
+    availableVariants.find(
+      (variant) => variant.size === selected.size
+    ) ?? availableVariants[0];
+
+  if (!nextVariant) return;
+
+  setSelectedVariants((old) => ({
+    ...old,
+    [product.id]: {
+      color: nextVariant.color,
+      size: nextVariant.size,
+    },
+  }));
+}}
+              className={`w-7 h-7 rounded-full border-2 ${
+                selected.color === color
+                  ? "border-[#9d8368] ring-2 ring-[#d8cbbb]"
+                  : "border-[#d8cbbb]"
+              }`}
+              style={{ backgroundColor: color || "#ffffff" }}
+              title={color || ""}
+              aria-label={`Color ${color}`}
+            />
+          ))}
+        </div>
+      </div>
+    )}
+
+    {Array.from(
+      new Set(product.variants.map((variant) => variant.size).filter(Boolean))
+    ).length > 0 && (
+      <div>
+        <p className="text-[9px] uppercase tracking-widest mb-2">
+          Tamaño
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {Array.from(
+            new Set(product.variants.map((variant) => variant.size).filter(Boolean))
+          ).map((size) => (
+            <button
+              key={size}
+              type="button"
+     onClick={() => {
+  const availableVariants = product.variants.filter(
+    (variant) => variant.size === size
+  );
+
+  const nextVariant =
+    availableVariants.find(
+      (variant) => variant.color === selected.color
+    ) ?? availableVariants[0];
+
+  if (!nextVariant) return;
+
+  setSelectedVariants((old) => ({
+    ...old,
+    [product.id]: {
+      color: nextVariant.color,
+      size: nextVariant.size,
+    },
+  }));
+}}
+              className={`px-3 py-2 text-xs border ${
+                selected.size === size
+                  ? "bg-[#9d8368] text-white border-[#9d8368]"
+                  : "border-[#d8cbbb]"
+              }`}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+
 
               <p className="text-sm mt-3 mb-4">
-                {money(product.price)}
+                {money(currentVariant?.price ?? product.price)}
+
               </p>
-
-              <button
-                onClick={() => setCart((old) => [...old, product.id])}
-                className="w-full border border-[#ad987e] py-3 text-[9px] tracking-[0.15em] uppercase hover:bg-[#9d8368] hover:text-white transition"
-              >
-                Agregar a la bolsa
-              </button>
-
-            </article>
-          ))}
-
+<button
+  onClick={() =>
+    setCart((old) => [
+      ...old,
+      {
+        product_id: product.id,
+        color: selected.color,
+        size: selected.size,
+      },
+    ])
+  }
+  className="w-full border border-[#ad987e] py-3 text-[9px] tracking-[0.15em] uppercase hover:bg-[#9d8368] hover:text-white transition"
+>
+  Agregar a tu caja
+</button>
+                   </article>
+            );
+          })}
         </div>
       </section>
 
@@ -541,7 +689,7 @@ export default function Home() {
                 <p className="text-[9px] tracking-[0.25em] uppercase text-[#a18b70]">
                   Lindos Detalles
                 </p>
-                <h2 className="font-serif text-3xl mt-1">Tu bolsa</h2>
+                <h2 className="font-serif text-3xl mt-1">Tu caja</h2>
               </div>
 
               <button
@@ -555,37 +703,59 @@ export default function Home() {
 
             {cart.length === 0 ? (
               <p className="text-sm text-[#897f73]">
-                Tu bolsa está vacía.
+                Tu caja está vacía.
               </p>
             ) : (
               <>
-                {cart.map((id, index) => {
-                  const product = products.find((item) => item.id === id);
-                  if (!product) return null;
+{cart.map((cartItem, index) => {
+  const product = products.find(
+    (item) => item.id === cartItem.product_id
+  );
 
-                  return (
-                    <div
-                      key={`${id}-${index}`}
-                      className="flex justify-between items-center border-b border-[#e8e1d7] py-4 gap-4"
-                    >
-                      <div>
-                        <p className="font-serif">{product.name}</p>
-                        <p className="text-sm mt-1">
-                          {money(product.price)}
-                        </p>
-                      </div>
+  if (!product) return null;
 
-                      <button
-                        onClick={() =>
-                          setCart((old) => old.filter((_, i) => i !== index))
-                        }
-                        className="text-xs underline text-[#897f73]"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  );
-                })}
+  const variant = product.variants?.find(
+    (item) =>
+      item.color === cartItem.color &&
+      item.size === cartItem.size
+  );
+
+  return (
+    <div
+      key={`${cartItem.product_id}-${index}`}
+      className="flex justify-between items-center border-b border-[#e8e1d7] py-4 gap-4"
+    >
+      <div>
+        <p className="font-serif">{product.name}</p>
+
+        {cartItem.color && (
+          <p className="text-xs text-[#897f73] mt-1">
+            Color: {cartItem.color}
+          </p>
+        )}
+
+        {cartItem.size && (
+          <p className="text-xs text-[#897f73]">
+            Tamaño: {cartItem.size}
+          </p>
+        )}
+
+        <p className="text-sm mt-1">
+          {money(variant?.price ?? product.price)}
+        </p>
+      </div>
+
+      <button
+        onClick={() =>
+          setCart((old) => old.filter((_, i) => i !== index))
+        }
+        className="text-xs underline text-[#897f73]"
+      >
+        Quitar
+      </button>
+    </div>
+  );
+})}
 
                 <div className="flex justify-between mt-8 text-lg font-serif">
                   <span>Total</span>

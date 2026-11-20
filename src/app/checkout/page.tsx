@@ -5,14 +5,29 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
+type ProductVariant = {
+  color: string | null;
+  size: string | null;
+  price: number;
+  image_url: string | null;
+};
+
 type Product = {
   id: string;
   name: string;
   price: number;
   image_url: string | null;
+  variants: ProductVariant[];
 };
 
-type CartItem = Product & {
+type CartItem = {
+  id: string;
+  product_id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+  color: string | null;
+  size: string | null;
   quantity: number;
 };
 
@@ -36,41 +51,94 @@ export default function CheckoutPage() {
     0
   );
 
+
   useEffect(() => {
     async function loadCart() {
       try {
         const savedCart = sessionStorage.getItem("lindos-detalles-cart");
-        const ids: string[] = savedCart ? JSON.parse(savedCart) : [];
 
-        if (!ids.length) {
+        const savedItems: {
+          product_id: string;
+          color: string | null;
+          size: string | null;
+        }[] = savedCart ? JSON.parse(savedCart) : [];
+
+        if (!savedItems.length) {
           setItems([]);
           setLoading(false);
           return;
         }
 
-        const quantities = new Map<string, number>();
-
-        ids.forEach((id) => {
-          quantities.set(id, (quantities.get(id) || 0) + 1);
-        });
+        const productIds = Array.from(
+          new Set(savedItems.map((item) => item.product_id))
+        );
 
         const { data, error } = await supabase
           .from("products")
-          .select("id, name, price, image_url")
-          .in("id", Array.from(quantities.keys()))
+          .select("id, name, price, image_url, variants")
+          .in("id", productIds)
           .eq("active", true);
 
         if (error) throw error;
 
-        const cartItems = (data || []).map((product) => ({
-          ...product,
-          quantity: quantities.get(product.id) || 0,
-        }));
+        const productsMap = new Map(
+          (data || []).map((product) => [product.id, product])
+        );
+
+        const cartItems: CartItem[] = [];
+
+        savedItems.forEach((savedItem) => {
+          const product = productsMap.get(savedItem.product_id);
+
+          if (!product) {
+            throw new Error("Uno de los productos ya no está disponible.");
+          }
+
+      const variant = product.variants?.length
+  ? product.variants.find(
+      (item: ProductVariant) =>
+        item.color === savedItem.color &&
+        item.size === savedItem.size
+    )
+  : null;
+
+          if (product.variants?.length && !variant) {
+            throw new Error(
+              "Una de las variantes seleccionadas ya no está disponible. Volvé a la tienda y elegí otra."
+            );
+          }
+
+          const color = variant ? savedItem.color : null;
+          const size = variant ? savedItem.size : null;
+
+          const key = `${product.id}::${color ?? ""}::${size ?? ""}`;
+
+          const existingItem = cartItems.find((item) => item.id === key);
+
+          if (existingItem) {
+            existingItem.quantity += 1;
+          } else {
+            cartItems.push({
+              id: key,
+              product_id: product.id,
+              name: product.name,
+              price: variant?.price ?? product.price,
+              image_url: variant?.image_url || product.image_url,
+              color,
+              size,
+              quantity: 1,
+            });
+          }
+        });
 
         setItems(cartItems);
       } catch (err) {
         console.error(err);
-        setError("No pudimos cargar tu carrito. Volvé a intentarlo.");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No pudimos cargar tu carrito. Volvé a intentarlo."
+        );
       } finally {
         setLoading(false);
       }
@@ -111,9 +179,11 @@ export default function CheckoutPage() {
           customer_notes: notes,
           payment_method: payment,
           items: items.map((item) => ({
-            product_id: item.id,
-            quantity: item.quantity,
-          })),
+  product_id: item.product_id,
+  color: item.color,
+  size: item.size,
+  quantity: item.quantity,
+})),
         }),
       });
 
@@ -435,12 +505,25 @@ export default function CheckoutPage() {
                   <div className="w-16 h-16 rounded-xl bg-[#f4f0e9]" />
                 )}
 
-                <div className="flex-1">
-                  <p className="font-medium">{item.name}</p>
-                  <p className="text-sm text-[#8b7b68]">
-                    Cantidad: {item.quantity}
-                  </p>
-                </div>
+               <div className="flex-1">
+  <p className="font-medium">{item.name}</p>
+
+  {item.color && (
+    <p className="text-sm text-[#8b7b68]">
+      Color: {item.color}
+    </p>
+  )}
+
+  {item.size && (
+    <p className="text-sm text-[#8b7b68]">
+      Tamaño: {item.size}
+    </p>
+  )}
+
+  <p className="text-sm text-[#8b7b68]">
+    Cantidad: {item.quantity}
+  </p>
+</div>
 
                 <p className="text-sm font-medium whitespace-nowrap">
                   ${ (item.price * item.quantity).toLocaleString("es-UY") }

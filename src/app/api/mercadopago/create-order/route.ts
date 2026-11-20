@@ -54,12 +54,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const savedItems = order.items as Array<{
-      name: string;
-      price: number;
-      quantity: number;
-      product_id: string;
-    }>;
+const savedItems = order.items as Array<{
+  name: string;
+  price: number;
+  quantity: number;
+  product_id: string;
+  color: string | null;
+  size: string | null;
+}>;
+
 
     if (!savedItems?.length) {
       return NextResponse.json(
@@ -68,11 +71,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const items = savedItems.map((item) => ({
-      title: item.name,
-      quantity: item.quantity,
-      unit_price: item.price.toFixed(2),
-    }));
+  const items = savedItems.map((item) => ({
+  title: `${item.name}${item.color ? ` - ${item.color}` : ""}${item.size ? ` - ${item.size}` : ""}`,
+  quantity: item.quantity,
+  unit_price: item.price.toFixed(2),
+}));
 
     const total = savedItems.reduce(
       (sum, item) => sum + item.price * item.quantity,
